@@ -1,0 +1,488 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Peloton Subscriber Retention Death Spiral Widget</title>
+  <style>
+    :root {
+      --bg: #07111f;
+      --panel: #101d2f;
+      --panel2: #15263d;
+      --text: #eef6ff;
+      --muted: #a8bdd6;
+      --blue: #35a7ff;
+      --cyan: #52e0c4;
+      --yellow: #ffd166;
+      --orange: #f8961e;
+      --red: #ef476f;
+      --green: #06d6a0;
+      --border: rgba(255,255,255,0.12);
+      --shadow: rgba(0,0,0,0.35);
+      --white: #ffffff;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      background: radial-gradient(circle at top left, #173d63 0%, var(--bg) 42%, #050914 100%);
+      color: var(--text);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      line-height: 1.45;
+    }
+
+    .wrap {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 28px 18px 44px;
+    }
+
+    header {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 18px;
+      align-items: center;
+      margin-bottom: 22px;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: clamp(1.7rem, 3vw, 3rem);
+      letter-spacing: -0.04em;
+    }
+
+    .subtitle {
+      margin: 8px 0 0;
+      color: var(--muted);
+      font-size: 1rem;
+      max-width: 780px;
+    }
+
+    .badge {
+      border: 1px solid var(--border);
+      background: rgba(255,255,255,0.06);
+      padding: 10px 14px;
+      border-radius: 999px;
+      color: var(--cyan);
+      font-weight: 800;
+      white-space: nowrap;
+    }
+
+    .grid {
+      display: grid;
+      gap: 16px;
+    }
+
+    .kpis {
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+
+    .cols {
+      grid-template-columns: 1.2fr 0.8fr;
+      align-items: stretch;
+    }
+
+    .card {
+      background: linear-gradient(180deg, rgba(255,255,255,0.075), rgba(255,255,255,0.035));
+      border: 1px solid var(--border);
+      box-shadow: 0 18px 45px var(--shadow);
+      border-radius: 18px;
+      padding: 18px;
+      overflow: hidden;
+    }
+
+    .card h2, .card h3 {
+      margin: 0 0 10px;
+      letter-spacing: -0.025em;
+    }
+
+    .card p { color: var(--muted); }
+
+    .kpi .label {
+      color: var(--muted);
+      font-size: 0.83rem;
+      margin-bottom: 7px;
+    }
+
+    .kpi .value {
+      font-size: 1.65rem;
+      font-weight: 900;
+      letter-spacing: -0.035em;
+    }
+
+    .kpi .delta {
+      margin-top: 8px;
+      font-size: 0.84rem;
+      color: var(--muted);
+    }
+
+    .good { color: var(--green); }
+    .warn { color: var(--yellow); }
+    .bad { color: var(--red); }
+    .blue { color: var(--blue); }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.9rem;
+      overflow: hidden;
+      border-radius: 14px;
+    }
+
+    th, td {
+      padding: 10px 9px;
+      border-bottom: 1px solid var(--border);
+      text-align: right;
+    }
+
+    th:first-child, td:first-child { text-align: left; }
+    th { color: var(--muted); font-weight: 800; background: rgba(255,255,255,0.04); }
+    tr:last-child td { border-bottom: 0; }
+
+    .controls {
+      display: grid;
+      gap: 14px;
+      margin-top: 12px;
+    }
+
+    .control {
+      background: rgba(255,255,255,0.045);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 12px;
+    }
+
+    .control label {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      color: var(--text);
+      font-weight: 750;
+      margin-bottom: 8px;
+    }
+
+    input[type="range"] { width: 100%; accent-color: var(--cyan); }
+
+    .meter {
+      height: 18px;
+      background: linear-gradient(90deg, var(--green), var(--yellow), var(--orange), var(--red));
+      border-radius: 999px;
+      overflow: hidden;
+      border: 1px solid var(--border);
+      position: relative;
+    }
+
+    .needle {
+      position: absolute;
+      top: -5px;
+      width: 4px;
+      height: 28px;
+      background: var(--white);
+      border-radius: 2px;
+      box-shadow: 0 0 12px rgba(255,255,255,0.9);
+      transition: left 0.25s ease;
+    }
+
+    .meterLabels {
+      display: flex;
+      justify-content: space-between;
+      color: var(--muted);
+      font-size: 0.78rem;
+      margin-top: 7px;
+    }
+
+    .chartbox {
+      height: 330px;
+      margin-top: 10px;
+      background: rgba(0,0,0,0.18);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 10px;
+    }
+
+    svg { width: 100%; height: 100%; display: block; }
+
+    .small {
+      font-size: 0.84rem;
+      color: var(--muted);
+    }
+
+    .pillrow { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+    .pill {
+      border: 1px solid var(--border);
+      background: rgba(255,255,255,0.055);
+      color: var(--muted);
+      border-radius: 999px;
+      padding: 7px 10px;
+      font-size: 0.82rem;
+    }
+
+    .conclusion {
+      border-left: 5px solid var(--cyan);
+      background: rgba(82,224,196,0.08);
+    }
+
+    .footer {
+      margin-top: 16px;
+      color: var(--muted);
+      font-size: 0.8rem;
+    }
+
+    @media (max-width: 900px) {
+      header, .cols { grid-template-columns: 1fr; }
+      .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .badge { width: fit-content; }
+    }
+
+    @media (max-width: 520px) {
+      .kpis { grid-template-columns: 1fr; }
+      th, td { font-size: 0.78rem; padding: 8px 6px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <div>
+        <h1>Is Peloton About to Spiral?</h1>
+        <p class="subtitle">Interactive subscriber-retention widget for the Peloton client engagement team. It uses real Peloton FY2023–FY2025 Form 10-K data and lets the CFO test whether churn and weaker gross additions could create a subscription “death spiral.”</p>
+      </div>
+      <div class="badge">FY2025 10-K Data</div>
+    </header>
+
+    <section class="grid kpis">
+      <div class="card kpi">
+        <div class="label">Paid Connected Fitness Subscriptions</div>
+        <div class="value" id="kpiSubs">2.800M</div>
+        <div class="delta bad">Down 5.9% YoY in FY2025</div>
+      </div>
+      <div class="card kpi">
+        <div class="label">Avg. Net Monthly CF Churn</div>
+        <div class="value" id="kpiChurn">1.6%</div>
+        <div class="delta warn">Up from 1.3% in FY2023</div>
+      </div>
+      <div class="card kpi">
+        <div class="label">Adjusted EBITDA</div>
+        <div class="value good">$403.6M</div>
+        <div class="delta good">Improved from $3.5M in FY2024</div>
+      </div>
+      <div class="card kpi">
+        <div class="label">Free Cash Flow</div>
+        <div class="value good">$323.7M</div>
+        <div class="delta good">Positive after two negative years</div>
+      </div>
+    </section>
+
+    <section class="grid cols" style="margin-top:16px;">
+      <div class="card">
+        <h2>Retention Model</h2>
+        <p class="small">Starting point is FY2025 ending paid Connected Fitness subscriptions: <strong>2,799,943</strong>. The projection updates monthly using: ending subs = beginning subs × (1 − monthly churn) + gross additions.</p>
+        <div class="controls">
+          <div class="control">
+            <label><span>Monthly churn</span><span id="churnOut">1.60%</span></label>
+            <input id="churn" type="range" min="0.8" max="3.2" step="0.05" value="1.6" />
+          </div>
+          <div class="control">
+            <label><span>Monthly gross Connected Fitness additions</span><span id="addsOut">33,000</span></label>
+            <input id="adds" type="range" min="5000" max="75000" step="1000" value="33000" />
+          </div>
+          <div class="control">
+            <label><span>Blended subscription ARPU / month</span><span id="arpuOut">$40.14</span></label>
+            <input id="arpu" type="range" min="25" max="55" step="0.25" value="40.14" />
+          </div>
+          <div class="control">
+            <label><span>Subscription gross margin</span><span id="marginOut">69.1%</span></label>
+            <input id="margin" type="range" min="55" max="80" step="0.1" value="69.1" />
+          </div>
+        </div>
+      </div>
+
+      <div class="card conclusion">
+        <h2>Death Spiral Risk</h2>
+        <div class="meter"><div class="needle" id="needle"></div></div>
+        <div class="meterLabels"><span>Low</span><span>Watch</span><span>High</span></div>
+        <h3 id="riskTitle" style="margin-top:18px;">Watch Zone</h3>
+        <p id="riskText">Peloton is not in a confirmed death spiral, but the subscriber base is shrinking and churn is rising. Positive free cash flow and strong subscription margins buy time.</p>
+        <div class="pillrow">
+          <div class="pill" id="yr3Subs">Year 3 subs: —</div>
+          <div class="pill" id="yr3Rev">Year 3 sub revenue: —</div>
+          <div class="pill" id="yr3Gp">Year 3 sub gross profit: —</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="grid cols" style="margin-top:16px;">
+      <div class="card">
+        <h2>Projected Connected Fitness Subscription Base</h2>
+        <div class="chartbox"><svg id="subsChart" viewBox="0 0 760 310" role="img" aria-label="Projected subscriptions chart"></svg></div>
+      </div>
+      <div class="card">
+        <h2>Real Peloton Data Used</h2>
+        <table>
+          <thead><tr><th>Metric</th><th>FY2023</th><th>FY2024</th><th>FY2025</th></tr></thead>
+          <tbody>
+            <tr><td>Paid CF subscriptions</td><td>2.998M</td><td>2.976M</td><td>2.800M</td></tr>
+            <tr><td>Paid App subscriptions</td><td>831k</td><td>621k</td><td>552k</td></tr>
+            <tr><td>Avg net monthly CF churn</td><td>1.3%</td><td>1.4%</td><td>1.6%</td></tr>
+            <tr><td>Total revenue</td><td>$2.800B</td><td>$2.700B</td><td>$2.491B</td></tr>
+            <tr><td>Subscription revenue</td><td>$1.670B</td><td>$1.709B</td><td>$1.674B</td></tr>
+            <tr><td>Connected products revenue</td><td>$1.130B</td><td>$0.992B</td><td>$0.817B</td></tr>
+            <tr><td>Subscription gross margin</td><td>67.2%</td><td>67.8%</td><td>69.1%</td></tr>
+            <tr><td>Adjusted EBITDA</td><td>$(208.5)M</td><td>$3.5M</td><td>$403.6M</td></tr>
+            <tr><td>Free cash flow</td><td>$(470.0)M</td><td>$(85.8)M</td><td>$323.7M</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="card" style="margin-top:16px;">
+      <h2>Assumptions and Conclusion</h2>
+      <table>
+        <thead><tr><th>Area</th><th>Assumption / Interpretation</th></tr></thead>
+        <tbody>
+          <tr><td>Data source</td><td>Peloton Interactive, Inc. FY2025 Form 10-K, including comparative FY2024 and FY2023 operating and financial metrics.</td></tr>
+          <tr><td>Starting base</td><td>FY2025 ending paid Connected Fitness subscriptions of 2,799,943.</td></tr>
+          <tr><td>Default churn</td><td>FY2025 Average Net Monthly Paid Connected Fitness Subscription Churn of 1.6%.</td></tr>
+          <tr><td>Default gross additions</td><td>33,000 per month, a directional approximation calibrated to the FY2024–FY2025 net decline after applying FY2025 churn.</td></tr>
+          <tr><td>ARPU</td><td>Default $40.14/month, approximated from FY2025 subscription revenue divided by average paid Connected Fitness plus paid App subscriptions.</td></tr>
+          <tr><td>Risk logic</td><td>Risk rises when the projected subscription base falls materially below FY2025 levels and annual subscription revenue / gross profit decline.</td></tr>
+          <tr><td>Conclusion</td><td><strong>Peloton is not currently in a death spiral</strong> because FY2025 adjusted EBITDA and free cash flow improved sharply and subscription margins remain high. However, the model flags real risk if churn continues rising and gross additions stay below monthly churn losses.</td></tr>
+        </tbody>
+      </table>
+      <p class="footer">Prepared for: Winston Lee. This widget is an analytical teaching model, not investment advice. For GitHub Pages: save this file as <strong>index.html</strong>, upload it to a public GitHub repository, then enable Settings → Pages → Deploy from branch → main.</p>
+    </section>
+  </div>
+
+  <script>
+    const baseSubs = 2799943;
+    const historicalSubs = [2997928, 2976265, 2799943];
+    const historicalYears = [2023, 2024, 2025];
+
+    const fmt = new Intl.NumberFormat('en-US');
+    const money = (n) => n >= 1e9 ? '$' + (n / 1e9).toFixed(2) + 'B' : '$' + (n / 1e6).toFixed(1) + 'M';
+    const short = (n) => n >= 1e6 ? (n / 1e6).toFixed(3) + 'M' : fmt.format(Math.round(n));
+
+    const els = {
+      churn: document.getElementById('churn'),
+      adds: document.getElementById('adds'),
+      arpu: document.getElementById('arpu'),
+      margin: document.getElementById('margin'),
+      churnOut: document.getElementById('churnOut'),
+      addsOut: document.getElementById('addsOut'),
+      arpuOut: document.getElementById('arpuOut'),
+      marginOut: document.getElementById('marginOut'),
+      needle: document.getElementById('needle'),
+      riskTitle: document.getElementById('riskTitle'),
+      riskText: document.getElementById('riskText'),
+      yr3Subs: document.getElementById('yr3Subs'),
+      yr3Rev: document.getElementById('yr3Rev'),
+      yr3Gp: document.getElementById('yr3Gp'),
+      chart: document.getElementById('subsChart')
+    };
+
+    function project(churnPct, adds, arpu, marginPct) {
+      const monthlyChurn = churnPct / 100;
+      let subs = baseSubs;
+      const points = [{ label: 'FY2025', month: 0, subs }];
+      let annual = [];
+      for (let m = 1; m <= 36; m++) {
+        const start = subs;
+        subs = start * (1 - monthlyChurn) + adds;
+        points.push({ label: 'M' + m, month: m, subs });
+        if (m % 12 === 0) {
+          const yearPoints = points.slice(m - 11, m + 1);
+          const avgSubs = yearPoints.reduce((s, p) => s + p.subs, 0) / yearPoints.length;
+          const rev = avgSubs * arpu * 12;
+          const gp = rev * marginPct / 100;
+          annual.push({ year: 2025 + m / 12, endSubs: subs, avgSubs, rev, gp });
+        }
+      }
+      return { points, annual };
+    }
+
+    function riskScore(annual, churnPct, adds) {
+      const finalSubs = annual[2].endSubs;
+      const baseDecline = Math.max(0, (baseSubs - finalSubs) / baseSubs);
+      const churnBurden = Math.max(0, (churnPct - 1.3) / 1.9);
+      const replacementGap = Math.max(0, ((baseSubs * (churnPct / 100)) - adds) / (baseSubs * (churnPct / 100)));
+      return Math.min(100, Math.round((baseDecline * 55 + churnBurden * 25 + replacementGap * 20) * 100));
+    }
+
+    function drawChart(points) {
+      const w = 760, h = 310, padL = 54, padR = 18, padT = 22, padB = 42;
+      const values = [...historicalSubs, ...points.map(p => p.subs)];
+      const minV = Math.min(...values) * 0.94;
+      const maxV = Math.max(...values) * 1.03;
+      const x = (i, total) => padL + (i / (total - 1)) * (w - padL - padR);
+      const y = v => padT + (maxV - v) / (maxV - minV) * (h - padT - padB);
+
+      const combined = [
+        { label: 'FY2023', subs: historicalSubs[0] },
+        { label: 'FY2024', subs: historicalSubs[1] },
+        { label: 'FY2025', subs: historicalSubs[2] },
+        ...points.filter(p => p.month > 0 && p.month % 3 === 0).map(p => ({ label: '+M' + p.month, subs: p.subs }))
+      ];
+
+      const path = combined.map((p, i) => `${i === 0 ? 'M' : 'L'} ${x(i, combined.length)} ${y(p.subs)}`).join(' ');
+      const grid = [0, .25, .5, .75, 1].map(t => {
+        const yy = padT + t * (h - padT - padB);
+        const val = maxV - t * (maxV - minV);
+        return `<line x1="${padL}" y1="${yy}" x2="${w - padR}" y2="${yy}" stroke="rgba(255,255,255,.12)"/><text x="8" y="${yy + 4}" fill="#a8bdd6" font-size="12">${(val/1e6).toFixed(1)}M</text>`;
+      }).join('');
+
+      const dots = combined.map((p, i) => `<circle cx="${x(i, combined.length)}" cy="${y(p.subs)}" r="4" fill="#52e0c4"><title>${p.label}: ${fmt.format(Math.round(p.subs))}</title></circle>`).join('');
+      const labels = combined.map((p, i) => (i % 2 === 0 || i < 3) ? `<text x="${x(i, combined.length)}" y="${h - 16}" fill="#a8bdd6" font-size="11" text-anchor="middle">${p.label}</text>` : '').join('');
+
+      els.chart.innerHTML = `
+        <rect x="0" y="0" width="${w}" height="${h}" fill="transparent"/>
+        ${grid}
+        <line x1="${padL}" y1="${h-padB}" x2="${w-padR}" y2="${h-padB}" stroke="rgba(255,255,255,.2)"/>
+        <path d="${path}" fill="none" stroke="#52e0c4" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+        ${dots}
+        ${labels}
+        <text x="${padL}" y="15" fill="#eef6ff" font-size="13" font-weight="700">Connected Fitness subscriptions</text>
+      `;
+    }
+
+    function update() {
+      const churn = parseFloat(els.churn.value);
+      const adds = parseInt(els.adds.value, 10);
+      const arpu = parseFloat(els.arpu.value);
+      const margin = parseFloat(els.margin.value);
+
+      els.churnOut.textContent = churn.toFixed(2) + '%';
+      els.addsOut.textContent = fmt.format(adds);
+      els.arpuOut.textContent = '$' + arpu.toFixed(2);
+      els.marginOut.textContent = margin.toFixed(1) + '%';
+
+      const result = project(churn, adds, arpu, margin);
+      const yr3 = result.annual[2];
+      const score = riskScore(result.annual, churn, adds);
+      els.needle.style.left = `calc(${score}% - 2px)`;
+      els.yr3Subs.textContent = 'Year 3 subs: ' + short(yr3.endSubs);
+      els.yr3Rev.textContent = 'Year 3 sub revenue: ' + money(yr3.rev);
+      els.yr3Gp.textContent = 'Year 3 sub gross profit: ' + money(yr3.gp);
+
+      if (score < 30) {
+        els.riskTitle.textContent = 'Low Risk';
+        els.riskTitle.className = 'good';
+        els.riskText.textContent = 'Gross additions are sufficient to offset churn. The subscription engine stabilizes, preserving recurring revenue and gross profit.';
+      } else if (score < 65) {
+        els.riskTitle.textContent = 'Watch Zone';
+        els.riskTitle.className = 'warn';
+        els.riskText.textContent = 'The base declines, but the model does not imply an immediate spiral. Management must defend churn, improve acquisition efficiency, and keep product engagement high.';
+      } else {
+        els.riskTitle.textContent = 'High Spiral Risk';
+        els.riskTitle.className = 'bad';
+        els.riskText.textContent = 'Churn outpaces replacement by enough to shrink subscription revenue and gross profit. If this forces lower investment in content, product, and support, a self-reinforcing death spiral becomes plausible.';
+      }
+
+      drawChart(result.points);
+    }
+
+    ['churn', 'adds', 'arpu', 'margin'].forEach(id => els[id].addEventListener('input', update));
+    update();
+  </script>
+</body>
+</html>
